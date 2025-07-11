@@ -18,15 +18,18 @@ class BilateralFilter():
         self.thread.join()
     
     def run(self):
+        started = False
         while True:
             try:
-                frame = self.input_q.get(timeout=5)
+                frame = self.input_q.get(timeout=0.1)
             except queue.Empty:
                 print(f"[Thread - {self.thread_id}] No more frames exsist.")
                 break
-
-            print(f"[Thread-{self.thread_id}] Started")
-        
+            
+            if not started:
+                print(f"[Thread-{self.thread_id}] Started")
+                started = True
+       
             bila_filter = cv.bilateralFilter(frame, 9, 100, 100)
             self.output_q.put(bila_filter)
             self.input_q.task_done()
