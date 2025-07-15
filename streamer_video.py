@@ -8,6 +8,7 @@ class VideoStream():
         self.cap = cap
         self.output_queue = output_queue
         self.thread = threading.Thread(target=self.run)
+        self._stop_event = threading.Event()
 
     def start(self):
         print(f"[Thread-{self.thread_id}] Started streaming.")
@@ -15,10 +16,14 @@ class VideoStream():
 
     def join(self):
         self.thread.join()
+    
+    def stop(self):
+        print(f"[Thread-{self.thread_id}] Stop signal received.")
+        self._stop_event.set()
 
     def run(self):
         target_height = 480
-        while self.cap.isOpened():
+        while self.cap.isOpened() and not self._stop_event.is_set():
             ret, frame = self.cap.read()
             if not ret:
                 print(f"[Stream Thread - {self.thread_id}] Stream ended or was closed.")
@@ -31,7 +36,11 @@ class VideoStream():
             timestamp = time.time()
             self.output_queue.put((timestamp, frame_resized))
             print(f"[Thread-{self.thread_id}] Pushed frame to Queue-{self.thread_id}")
-            time.sleep(0.2)
+            
+            for _ in range(10):
+                if self._stop_event.is_set():
+                    break
+                time.sleep(0.02)
 
         self.cap.release()
         print(f"[Thread-{self.thread_id}] Stream thread exited.")

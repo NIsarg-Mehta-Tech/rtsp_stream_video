@@ -32,7 +32,6 @@ class FrameDisplay():
         print("[Display] Started synced display.")
 
         while True:
-            now = time.time()
 
             for qid in self.queue_id:
                 try:
@@ -61,7 +60,7 @@ class FrameDisplay():
                 ts, _, _ = self.buffers[qid][0]  # Get timestamp of oldest frame in each buffer
                 timestamps.append(ts)
 
-            target_ts = max(timestamps)
+            target_ts = sorted(timestamps)[len(timestamps) // 2]
 
 
             synced_frames = []
