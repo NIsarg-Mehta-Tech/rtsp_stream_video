@@ -1,5 +1,4 @@
 import cv2 as cv
-import numpy as np
 import queue
 from streamer_video import VideoStream
 from bilateral_filter import BilateralFilter

@@ -17,13 +17,19 @@ class VideoStream():
         self.thread.join()
 
     def run(self):
+        target_height = 480
         while self.cap.isOpened():
             ret, frame = self.cap.read()
             if not ret:
                 print(f"[Stream Thread - {self.thread_id}] Stream ended or was closed.")
                 break
 
-            self.output_queue.put(frame)
+            height_ratio = target_height / frame.shape[0]
+            width =  int(frame.shape[1] * height_ratio)
+            frame_resized = cv.resize(frame, (width, target_height))
+
+            timestamp = time.time()
+            self.output_queue.put((timestamp, frame_resized))
             print(f"[Thread-{self.thread_id}] Pushed frame to Queue-{self.thread_id}")
             time.sleep(0.2)
 
