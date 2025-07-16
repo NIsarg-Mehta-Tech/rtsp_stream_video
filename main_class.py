@@ -1,9 +1,9 @@
 import cv2 as cv
 import queue
-from streamer_video import VideoStream
-from bilateral_filter import BilateralFilter
-from frame_display import FrameDisplay
-from thread_manager import ThreadMananager
+from app.streamer_video import VideoStream
+from app.bilateral_filter import BilateralFilter
+from app.frame_display import FrameDisplay
+from app.thread_manager import ThreadMananager
 class RTSP_Video_Stream:
     def __init__(self, rtsp_urls):
         self.rtsp_urls = rtsp_urls
