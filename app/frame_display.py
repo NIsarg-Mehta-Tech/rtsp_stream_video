@@ -2,14 +2,18 @@ import cv2 as cv
 import queue
 import time
 import collections
-class FrameDisplay():
-    def __init__(self, q, queue_id, caps, sync_threshold=0.1):
 
+class FrameDisplay():
+    """
+    Synchronizes and displays frames from multiple input queues.
+    Uses buffers to align frames based on timestamps and show them side by side.
+    """
+    def __init__(self, q, queue_id, caps, sync_threshold=0.1):
         self.q = q
         self.queue_id = queue_id
         self.caps = caps
         self.sync_threshold = sync_threshold
-        self.frame_counts = {}
+        self.frame_counts = {} # Get timestamp of oldest frame in each buffer
         for qid in queue_id:
             self.frame_counts[qid] = 0
         self.buffers = {}
@@ -18,21 +22,18 @@ class FrameDisplay():
 
 
     def cleanup(self):
+        # Release all video sources and clear OpenCV display
         for cap in self.caps:
             cap.release()
-
         for qid in self.queue_id:
             with self.q[qid].mutex:
                 self.q[qid].queue.clear()
         cv.destroyAllWindows()
 
-
-
     def run(self):
         print("[Display] Started synced display.")
-
         while True:
-
+            # Collect all available frames into buffers
             for qid in self.queue_id:
                 try:
                     while True:
@@ -41,7 +42,6 @@ class FrameDisplay():
                         self.frame_counts[qid] += 1
                         count = self.frame_counts[qid]
                         self.buffers[qid].append((ts, count, frame))
-
                 except queue.Empty:
                     continue
 
@@ -54,7 +54,7 @@ class FrameDisplay():
             if any_empty:
                 continue
 
-
+            # Synchronize based on the median timestamp across all queues
             timestamps = []
             for qid in self.queue_id:
                 ts, _, _ = self.buffers[qid][0]  # Get timestamp of oldest frame in each buffer
@@ -62,38 +62,28 @@ class FrameDisplay():
 
             target_ts = sorted(timestamps)[len(timestamps) // 2]
 
-
             synced_frames = []
-
             for qid in self.queue_id:
                 best_frame = None
                 best_diff = float('inf')
-
                 for ts, count, frame in self.buffers[qid]:
                     diff = abs(ts - target_ts)
                     if diff < best_diff and diff <= self.sync_threshold:
                         best_frame = (qid, count, frame)
                         best_diff = diff
-
                 if best_frame:
                     synced_frames.append(best_frame)
-
 
             if len(synced_frames) != len(self.queue_id):
                 continue
 
-
             labeled_frames = []
-
             for qid, count, frame in synced_frames:
                 label = f"Frame-{count}"
-                cv.putText(frame, label, (10, 30), cv.FONT_HERSHEY_SIMPLEX,
-                           1, (0, 255, 0), 2)
+                cv.putText(frame, label, (10, 30), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 labeled_frames.append(frame)
 
-
             combined = cv.hconcat(labeled_frames)
-
             scale = min(1.0, 1280 / combined.shape[1])
             combined_resized = cv.resize(combined,
                 (int(combined.shape[1] * scale), int(combined.shape[0] * scale))

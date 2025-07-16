@@ -1,4 +1,10 @@
 class ThreadMananager:
+    """
+    A simple utility class to manage multiple threads:
+    - Start all
+    - Stop all (via user-defined stop methods)
+    - Join all (wait for all threads to finish)
+    """
     def __init__(self):
         self.threads = []
     
