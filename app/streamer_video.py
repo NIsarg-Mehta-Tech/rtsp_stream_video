@@ -15,14 +15,14 @@ class VideoStream():
         self._stop_event = threading.Event()
 
     def start(self):
-        print(f"[Thread-{self.thread_id}] Started streaming.")
+        print(f"[Thread - {self.thread_id}] Started streaming.")
         self.thread.start()
 
     def join(self):
         self.thread.join()
 
     def stop(self):
-        print(f"[Thread-{self.thread_id}] Stop signal received.")
+        print(f"[Thread - {self.thread_id}] Stop signal received.")
         self._stop_event.set()
 
     def run(self):
@@ -41,7 +41,7 @@ class VideoStream():
             # Push timestamped frame to output queue
             timestamp = time.time()
             self.output_queue.put((timestamp, frame_resized))
-            print(f"[Thread-{self.thread_id}] Pushed frame to Queue-{self.thread_id}")
+            print(f"[Thread - {self.thread_id}] Pushed frame to Queue-{self.thread_id}")
 
             # Sleep in small intervals so that stop can interrupt
             for _ in range(10):
@@ -50,4 +50,4 @@ class VideoStream():
                 time.sleep(0.02)
 
         self.cap.release()
-        print(f"[Thread-{self.thread_id}] Stream thread exited.")
+        print(f"[Thread - {self.thread_id}] Stream thread exited.")

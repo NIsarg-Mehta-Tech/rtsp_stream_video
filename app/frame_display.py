@@ -1,17 +1,20 @@
 import cv2 as cv
-import queue
-import time
 import collections
+import threading
+import time
 
 class FrameDisplay():
     """
-    Synchronizes and displays frames from multiple input queues.
-    Uses buffers to align frames based on timestamps and show them side by side.
+    Synchronizes and prepares frames from multiple input queues.
+    Combines them into a single frame and sends to display_frame_queue and crop_queue.
     """
-    def __init__(self, q, queue_id, caps, sync_threshold=0.1):
+    def __init__(self, thread_id, q, queue_id, caps, crop_queue, display_frame_queue, sync_threshold=0.1):
+        self.thread_id = thread_id
         self.q = q
         self.queue_id = queue_id
         self.caps = caps
+        self.crop_queue = crop_queue
+        self.display_frame_queue = display_frame_queue
         self.sync_threshold = sync_threshold
         self.frame_counts = {} # Get timestamp of oldest frame in each buffer
         for qid in queue_id:
@@ -19,7 +22,19 @@ class FrameDisplay():
         self.buffers = {}
         for qid in queue_id:
             self.buffers[qid] = collections.deque(maxlen=10)
+        self.thread = threading.Thread(target=self.run)
+        self._stop_event = threading.Event()
+    
+    def start(self):
+        print(f"[Thread - {self.thread_id}] Started Display")
+        self.thread.start()
 
+    def stop(self):
+        print(f"[Thread - {self.thread_id}] Stopped Display")
+        self._stop_event.set()
+    
+    def join(self):
+        self.thread.join()
 
     def cleanup(self):
         # Release all video sources and clear OpenCV display
@@ -32,34 +47,20 @@ class FrameDisplay():
 
     def run(self):
         print("[Display] Started synced display.")
-        while True:
-            # Collect all available frames into buffers
+        while not self._stop_event.is_set():
+            # Fill frame buffers
             for qid in self.queue_id:
-                try:
-                    while True:
-                        ts, frame = self.q[qid].get_nowait()
-                        self.q[qid].task_done()
-                        self.frame_counts[qid] += 1
-                        count = self.frame_counts[qid]
-                        self.buffers[qid].append((ts, count, frame))
-                except queue.Empty:
-                    continue
+                while not self.q[qid].empty():
+                    ts, frame = self.q[qid].get()
+                    self.q[qid].task_done()
+                    self.frame_counts[qid] += 1
+                    self.buffers[qid].append((ts, self.frame_counts[qid], frame))
 
-            any_empty = False
-            for qid in self.queue_id:
-                if len(self.buffers[qid]) == 0:
-                    any_empty = True
-                    break
-
-            if any_empty:
+            if any(len(self.buffers[qid]) == 0 for qid in self.queue_id):
                 continue
 
-            # Synchronize based on the median timestamp across all queues
-            timestamps = []
-            for qid in self.queue_id:
-                ts, _, _ = self.buffers[qid][0]  # Get timestamp of oldest frame in each buffer
-                timestamps.append(ts)
-
+            # Sync based on median timestamp
+            timestamps = [self.buffers[qid][0][0] for qid in self.queue_id]
             target_ts = sorted(timestamps)[len(timestamps) // 2]
 
             synced_frames = []
@@ -89,13 +90,11 @@ class FrameDisplay():
                 (int(combined.shape[1] * scale), int(combined.shape[0] * scale))
             )
 
-            try:
-                cv.imshow("Combined Filtered Streams", combined_resized)
-            except cv.error as e:
-                print(f"[Display] OpenCV imshow error: {e}")
+            # Push frame to queues
+            if not self.display_frame_queue.full():
+                self.display_frame_queue.put(combined_resized)
 
-            if cv.waitKey(1) & 0xFF == ord('q'):
-                print("[Display] Quit requested.")
-                break
+            if not self.crop_queue.full():
+                self.crop_queue.put(combined_resized)
 
         self.cleanup()

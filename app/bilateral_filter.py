@@ -16,14 +16,14 @@ class BilateralFilter():
         self._stop_event = threading.Event()
 
     def start(self):
-        print(f"[Thread {self.thread_id}] Started filtering.")
+        print(f"[Thread - {self.thread_id}] Started filtering.")
         self.thread.start()
     
     def join(self):
         self.thread.join()
 
     def stop(self):
-        print(f"[Thread {self.thread_id}] Stop signal received.")
+        print(f"[Thread - {self.thread_id}] Stop signal received.")
         self._stop_event.set()
 
     def run(self):
@@ -31,16 +31,16 @@ class BilateralFilter():
             try:
                 # Get frame with timestamp
                 timestamp, frame = self.input_q.get(timeout=0.1)
+                print(f"[Thread - {self.thread_id}] Got frame from input queue.")
+
+                # Apply bilateral filter to the frame
+                bila_filter = cv.bilateralFilter(frame, 10, 90, 90)
+                self.output_q.put((timestamp, bila_filter))
+                print(f"[Thread - {self.thread_id}] Put filtered frame to output queue.")
+                self.input_q.task_done()
             except queue.Empty:
                 print(f"[Thread - {self.thread_id}] No more frames exsist.")
-                if self._stop_event.is_set():
-                    break
                 continue
-
-            # Apply bilateral filter to the frame
-            bila_filter = cv.bilateralFilter(frame, 10, 90, 90)
-            self.output_q.put((timestamp, bila_filter))
-            self.input_q.task_done()
 
             # Pause to simulate processing delay
             for _ in range(10):
@@ -48,4 +48,4 @@ class BilateralFilter():
                     break
                 time.sleep(0.05)
 
-        print(f"[Thread-{self.thread_id}] Exiting bilateral filter thread.")
+        print(f"[Thread - {self.thread_id}] Exiting bilateral filter thread.")
