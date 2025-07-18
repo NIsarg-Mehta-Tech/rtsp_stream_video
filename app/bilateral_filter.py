@@ -14,6 +14,7 @@ class BilateralFilter():
         self.output_q = output_q
         self.thread = threading.Thread(target=self.run)
         self._stop_event = threading.Event()
+        self.frame_count = 0
 
     def start(self):
         print(f"[Thread - {self.thread_id}] Started filtering.")
@@ -28,24 +29,23 @@ class BilateralFilter():
 
     def run(self):
         while not self._stop_event.is_set():
-            try:
+            if not self.input_q.empty():
                 # Get frame with timestamp
-                timestamp, frame = self.input_q.get(timeout=0.1)
+                timestamp, frame = self.input_q.get()
                 print(f"[Thread - {self.thread_id}] Got frame from input queue.")
-
+                self.frame_count += 1
                 # Apply bilateral filter to the frame
                 bila_filter = cv.bilateralFilter(frame, 10, 90, 90)
-                self.output_q.put((timestamp, bila_filter))
+                self.output_q.put((timestamp, self.frame_count, bila_filter))
                 print(f"[Thread - {self.thread_id}] Put filtered frame to output queue.")
                 self.input_q.task_done()
-            except queue.Empty:
-                print(f"[Thread - {self.thread_id}] No more frames exsist.")
-                continue
-
-            # Pause to simulate processing delay
-            for _ in range(10):
-                if self._stop_event.is_set():
-                    break
-                time.sleep(0.05)
+            else:
+                time.sleep(0.01)
+            
+            # # Pause to simulate processing delay
+            # for _ in range(10):
+            #     if self._stop_event.is_set():
+            #         break
+            #     time.sleep(0.05)
 
         print(f"[Thread - {self.thread_id}] Exiting bilateral filter thread.")

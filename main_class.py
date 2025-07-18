@@ -2,8 +2,8 @@ import cv2 as cv
 import queue
 from app.streamer_video import VideoStream
 from app.bilateral_filter import BilateralFilter
-from app.frame_display import FrameDisplay
 from app.frame_cropped import FrameCropped
+from app.frame_display import FrameDisplay
 from thread_manager.thread_manager import ThreadMananager
 class RTSP_Video_Stream:
     """
@@ -16,11 +16,10 @@ class RTSP_Video_Stream:
     def __init__(self, rtsp_urls):
         self.rtsp_urls = rtsp_urls
         self.n = len(rtsp_urls)
-        self.queues = {i: queue.Queue() for i in range(1, 2 * self.n + 1)}
+        self.raw_queues = {i: queue.Queue() for i in range(1, 2 * self.n + 1)}
+        self.crop_queue = {i: queue.Queue() for i in range(1, self.n + 1)}
         self.caps = [cv.VideoCapture(url) for url in self.rtsp_urls]
-        self.crop_queue = queue.Queue(maxsize=5)
         self.display_frame_queue = queue.Queue(maxsize=1)
-        self.display_crop_queue = queue.Queue(maxsize=1)
         self.thread_manager = ThreadMananager()
 
         for idx, cap in enumerate(self.caps):
@@ -33,22 +32,21 @@ class RTSP_Video_Stream:
             stream_thread_id = 2 * i + 1
             filter_thread_id = 2 * i + 2
 
-            stream = VideoStream(stream_thread_id, self.caps[i], self.queues[stream_thread_id])
-            filt = BilateralFilter(filter_thread_id, self.queues[stream_thread_id], self.queues[filter_thread_id])
+            stream = VideoStream(stream_thread_id, self.caps[i], self.raw_queues[stream_thread_id])
+            
+            filt = BilateralFilter(filter_thread_id, self.raw_queues[stream_thread_id], self.raw_queues[filter_thread_id])
+            
+            crop = FrameCropped(100 + i, self.raw_queues[filter_thread_id], self.crop_queue[i + 1])
 
             self.thread_manager.add(stream)
             self.thread_manager.add(filt)
+            self.thread_manager.add(crop)
 
-    
         display_thread_id = 2 * self.n + 1
-        filtered_queue_ids = [2 * i + 2 for i in range(self.n)]
-        display = FrameDisplay(display_thread_id, self.queues, filtered_queue_ids, self.caps, self.crop_queue, self.display_frame_queue)
+        display = FrameDisplay(display_thread_id, self.crop_queue, list(self.crop_queue.keys()), self.caps, self.display_frame_queue)        
+
         self.thread_manager.add(display)
         self.display = display
-
-        crop_thread_id = 2 * self.n + 2
-        cropper = FrameCropped(crop_thread_id, self.crop_queue, self.display_crop_queue)  
-        self.thread_manager.add(cropper)
 
     def start(self):
         print("[App] Strating RTSP Video Stream")
@@ -58,11 +56,7 @@ class RTSP_Video_Stream:
         while True:
             if not self.display_frame_queue.empty():
                 frame = self.display_frame_queue.get()
-                cv.imshow("Combined Filtered Streams", frame)
-            
-            if not self.display_crop_queue.empty():
-                crop_frame = self.display_crop_queue.get()
-                cv.imshow("Cropped Frame", crop_frame)
+                cv.imshow("Combined Cropped Streams", frame)
 
             if cv.waitKey(1) & 0xFF == ord('q'):
                 print("[Main] Quit requested from GUI.")

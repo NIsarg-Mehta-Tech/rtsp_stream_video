@@ -12,15 +12,19 @@ class ThreadMananager:
         self.threads.append(thread_object)
     
     def start_all(self):
+        print("[ThreadManager] Starting all threads...")
         for t in self.threads:
             t.start()
+        print("[ThreadManager] All threads started.")
     
     def stop_all(self):
+        print("[ThreadManager] Stopping all threads...")
         for t in self.threads:
             t.stop()
+        print("[ThreadManager] All stop signals sent.")
 
     def join_all(self):
+        print("[ThreadManager] Waiting for all threads to finish...")
         for t in self.threads:
             t.join()
-
-        print("All threads finished")
+        print("[ThreadManager] All threads finished")

@@ -8,12 +8,11 @@ class FrameDisplay():
     Synchronizes and prepares frames from multiple input queues.
     Combines them into a single frame and sends to display_frame_queue and crop_queue.
     """
-    def __init__(self, thread_id, q, queue_id, caps, crop_queue, display_frame_queue, sync_threshold=0.1):
+    def __init__(self, thread_id, q, queue_id, caps, display_frame_queue, sync_threshold=0.1):
         self.thread_id = thread_id
         self.q = q
         self.queue_id = queue_id
         self.caps = caps
-        self.crop_queue = crop_queue
         self.display_frame_queue = display_frame_queue
         self.sync_threshold = sync_threshold
         self.frame_counts = {} # Get timestamp of oldest frame in each buffer
@@ -51,10 +50,10 @@ class FrameDisplay():
             # Fill frame buffers
             for qid in self.queue_id:
                 while not self.q[qid].empty():
-                    ts, frame = self.q[qid].get()
+                    ts, count, frame = self.q[qid].get()
                     self.q[qid].task_done()
-                    self.frame_counts[qid] += 1
-                    self.buffers[qid].append((ts, self.frame_counts[qid], frame))
+                    self.frame_counts[qid] = count
+                    self.buffers[qid].append((ts, count, frame))
 
             if any(len(self.buffers[qid]) == 0 for qid in self.queue_id):
                 continue
@@ -93,8 +92,5 @@ class FrameDisplay():
             # Push frame to queues
             if not self.display_frame_queue.full():
                 self.display_frame_queue.put(combined_resized)
-
-            if not self.crop_queue.full():
-                self.crop_queue.put(combined_resized)
 
         self.cleanup()
