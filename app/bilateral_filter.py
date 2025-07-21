@@ -8,13 +8,16 @@ class BilateralFilter():
     Applies a bilateral filter to each incoming frame from input_q and sends
     the filtered frame with timestamp to output_q. Runs in a separate thread.
     """
-    def __init__(self, thread_id, input_q, output_q):
+    def __init__(self, thread_id, input_q):
         self.thread_id = thread_id
         self.input_q = input_q
-        self.output_q = output_q
+        self.output_q = queue.Queue(maxsize=5)
         self.thread = threading.Thread(target=self.run)
         self._stop_event = threading.Event()
         self.frame_count = 0
+    
+    def get_output_queue(self):
+        return self.output_q
 
     def start(self):
         print(f"[Thread - {self.thread_id}] Started filtering.")
@@ -41,11 +44,5 @@ class BilateralFilter():
                 self.input_q.task_done()
             else:
                 time.sleep(0.01)
-            
-            # # Pause to simulate processing delay
-            # for _ in range(10):
-            #     if self._stop_event.is_set():
-            #         break
-            #     time.sleep(0.05)
-
+           
         print(f"[Thread - {self.thread_id}] Exiting bilateral filter thread.")

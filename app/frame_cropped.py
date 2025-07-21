@@ -1,19 +1,23 @@
+import queue
 import threading
 import time
 
 class FrameCropped():
     """
-    Thread to receive combined frames, crop center 500x500 region,
+    Thread to receive combined frames, crop center 400x400 region,
     and display the cropped window.
     """
-    def __init__(self, thread_id, input_q, output_q):
+    def __init__(self, thread_id, input_q):
         self.thread_id = thread_id
         self.input_q = input_q
-        self.output_q = output_q
+        self.output_q = queue.Queue(maxsize = 5)
         self.thread = threading.Thread(target=self.run)
         self._stop_event = threading.Event()
         self.frame_count = 0
-
+    
+    def get_output_queue(self):
+        return self.output_q
+    
     def start(self):
         print(f"[Thread - {self.thread_id}] Started Cropping")
         self.thread.start()
@@ -34,7 +38,7 @@ class FrameCropped():
                 crop_w = min(400,w) 
                 crop_h = min(400,h)
 
-                # Crop center 500x500 area
+                # Crop center 400x400 area
                 start_x = (w - crop_w) // 2
                 start_y = (h - crop_h) // 2
                 cropped_frame = frame[start_y:start_y+crop_h, start_x:start_x+crop_w]

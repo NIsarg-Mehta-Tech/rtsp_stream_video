@@ -1,3 +1,4 @@
+import queue
 import threading
 import time
 import cv2 as cv
@@ -7,13 +8,16 @@ class VideoStream():
     Captures video frames from a source (e.g., RTSP stream) in a separate thread.
     Resizes frames and pushes them into an output queue with timestamps.
     """
-    def __init__(self, thread_id, cap, output_queue):
+    def __init__(self, thread_id, cap):
         self.thread_id = thread_id
         self.cap = cap  # OpenCV video capture object
-        self.output_queue = output_queue  # Queue to push timestamped frames
+        self.output_queue = queue.Queue(maxsize=5)
         self.thread = threading.Thread(target=self.run)
         self._stop_event = threading.Event()
 
+    def get_output_queue(self):
+        return self.output_queue
+    
     def start(self):
         print(f"[Thread - {self.thread_id}] Started streaming.")
         self.thread.start()

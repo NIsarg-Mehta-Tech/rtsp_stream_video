@@ -5,22 +5,18 @@ import time
 
 class FrameDisplay():
     """
-    Synchronizes and prepares frames from multiple input queues.
-    Combines them into a single frame and sends to display_frame_queue and crop_queue.
+    Synchronizes and prepares prev/curr cropped frames from multiple input queues.
+    Combines them into a 2x3 grid frame and sends to display_frame_queue.
     """
-    def __init__(self, thread_id, q, queue_id, caps, display_frame_queue, sync_threshold=0.1):
+    def __init__(self, thread_id, q, queue_id, caps, display_frame_queue):
         self.thread_id = thread_id
         self.q = q
         self.queue_id = queue_id
         self.caps = caps
         self.display_frame_queue = display_frame_queue
-        self.sync_threshold = sync_threshold
-        self.frame_counts = {} # Get timestamp of oldest frame in each buffer
-        for qid in queue_id:
-            self.frame_counts[qid] = 0
-        self.buffers = {}
-        for qid in queue_id:
-            self.buffers[qid] = collections.deque(maxlen=10)
+        self.prev_frames = {qid: None for qid in queue_id}
+        self.curr_frames = {qid: None for qid in queue_id}
+        self.counts = {qid: 0 for qid in queue_id}
         self.thread = threading.Thread(target=self.run)
         self._stop_event = threading.Event()
     
@@ -50,40 +46,37 @@ class FrameDisplay():
             # Fill frame buffers
             for qid in self.queue_id:
                 while not self.q[qid].empty():
-                    ts, count, frame = self.q[qid].get()
+                    ts, count, prev, curr = self.q[qid].get()
                     self.q[qid].task_done()
-                    self.frame_counts[qid] = count
-                    self.buffers[qid].append((ts, count, frame))
+                    self.prev_frames[qid] = prev
+                    self.curr_frames[qid] = curr
+                    self.counts[qid] = count
 
-            if any(len(self.buffers[qid]) == 0 for qid in self.queue_id):
+            if any(self.prev_frames[qid] is None or self.curr_frames[qid] is None for qid in self.queue_id):
+                time.sleep(0.01)
                 continue
 
-            # Sync based on median timestamp
-            timestamps = [self.buffers[qid][0][0] for qid in self.queue_id]
-            target_ts = sorted(timestamps)[len(timestamps) // 2]
+            # Build top and bottom row (Prev / Curr)
+            prev_frames = []
+            curr_frames = []
 
-            synced_frames = []
             for qid in self.queue_id:
-                best_frame = None
-                best_diff = float('inf')
-                for ts, count, frame in self.buffers[qid]:
-                    diff = abs(ts - target_ts)
-                    if diff < best_diff and diff <= self.sync_threshold:
-                        best_frame = (qid, count, frame)
-                        best_diff = diff
-                if best_frame:
-                    synced_frames.append(best_frame)
+                count = self.counts[qid]
+                prev = self.prev_frames[qid].copy()
+                curr = self.curr_frames[qid].copy()
+                label_prev = f"[{qid}] Prev-{count - 5}"
+                label_curr = f"[{qid}] Curr-{count}"
+                
+                cv.putText(prev, label_prev, (10, 30), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv.putText(curr, label_curr, (10, 30), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                
+                prev_frames.append(prev)
+                curr_frames.append(curr)
 
-            if len(synced_frames) != len(self.queue_id):
-                continue
+            row1 = cv.hconcat(prev_frames)
+            row2 = cv.hconcat(curr_frames)
+            combined = cv.vconcat([row1, row2])
 
-            labeled_frames = []
-            for qid, count, frame in synced_frames:
-                label = f"Frame-{count}"
-                cv.putText(frame, label, (10, 30), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                labeled_frames.append(frame)
-
-            combined = cv.hconcat(labeled_frames)
             scale = min(1.0, 1280 / combined.shape[1])
             combined_resized = cv.resize(combined,
                 (int(combined.shape[1] * scale), int(combined.shape[0] * scale))
@@ -92,5 +85,7 @@ class FrameDisplay():
             # Push frame to queues
             if not self.display_frame_queue.full():
                 self.display_frame_queue.put(combined_resized)
+
+            time.sleep(1 / 30)
 
         self.cleanup()
