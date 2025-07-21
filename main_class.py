@@ -1,35 +1,43 @@
 import cv2 as cv
 import queue
-from app.streamer_video import VideoStream
-from app.bilateral_filter import BilateralFilter
-from app.frame_cropped import FrameCropped
-from app.frame_difference import FrameDiff
-from app.frame_display import FrameDisplay
+from classes.streamer_video import VideoStream
+from classes.bilateral_filter import BilateralFilter
+from classes.frame_cropped import FrameCropped
+from classes.frame_difference import FrameDiff
+from classes.frame_display import FrameDisplay
 from thread_manager.thread_manager import ThreadMananager
+
 class RTSP_Video_Stream:
     """
-    The main controller class that sets up:
-    - RTSP streams
-    - Bilateral filtering threads
-    - Display with synchronization
-    - Thread management (start, stop, cleanup)
+    Main controller class that:
+    - Sets up each RTSP stream
+    - Applies Bilateral → Crop → Diff processing pipelines
+    - Creates synchronized display thread
+    - Manages threads lifecycle (start, stop, cleanup)
     """
     def __init__(self, rtsp_urls):
+        # Store input RTSP URLs
         self.rtsp_urls = rtsp_urls
         self.num_streams = len(rtsp_urls)
+
+        # Create a thread manager to handle lifecycle of threads
         self.thread_manager = ThreadMananager()
+
+        # Final display frame queue (latest frame only)
         self.display_frame_queue = queue.Queue(maxsize=1)
         self.process_layers = [BilateralFilter, FrameCropped, FrameDiff]
-        
+
+        # Store the output queues from last layer per stream
         self.final_output_queues = []
         
         self.caps = [cv.VideoCapture(url) for url in self.rtsp_urls]
 
+        # Check each stream opens correctly
         for idx, cap in enumerate(self.caps):
             if not cap.isOpened():
                 print(f"[Error] Cannot open RTSP stream at index {idx}")
                 raise RuntimeError("Failed to open one or more RTSP streams")
-            
+
     def setup_threads(self):
         thread_id = 1
 
